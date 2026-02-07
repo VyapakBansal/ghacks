@@ -1,6 +1,7 @@
 import math
 import pyproj
 
+# ---------- Geodetic -> ECEF ----------
 def geodetic_to_ecef(lat, lon, h, a, f):
     lat_rad = math.radians(lat)
     lon_rad = math.radians(lon)
