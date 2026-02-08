@@ -178,7 +178,7 @@ A unified coordinate transformation system supporting:
 
 ## Final Results (NAD83)
 
-### Converted Coordinates - Decimal Degrees
+### Decimal Degrees
 
 | Point | Latitude (°)  | Longitude (°)   | Elevation (m) |
 | ----- | ------------- | --------------- | ------------- |
@@ -188,7 +188,7 @@ A unified coordinate transformation system supporting:
 | **D** | 51.0757341667 | -114.1320875000 | 1108.22       |
 | **E** | 51.0745880556 | -114.1361938889 | 1109.35       |
 
-### Original DMS Format
+### DMS Format
 
 | Point | Latitude       | Longitude       | Elevation (m) |
 | ----- | -------------- | --------------- | ------------- |
@@ -204,7 +204,7 @@ A unified coordinate transformation system supporting:
 
 ### 1. `GeoConverter` Class
 
-**File**: Main coordinate transformation engine
+**File**: `convert_pts.py`
 **Features**:
 
 - WGS84/NAD83 ellipsoid support
@@ -215,7 +215,6 @@ A unified coordinate transformation system supporting:
 
 ### 2. Interactive CLI Interface
 
-**File**: User-friendly menu system
 **Options**:
 
 - Basic conversions (Geodetic ↔ ECEF ↔ ENU)
@@ -225,9 +224,45 @@ A unified coordinate transformation system supporting:
 
 ### 3. Coordinate Conversion Script
 
-**File**: `coordinate_conversion.py`
+**File**: `coordinate_pts.py`
 **Purpose**: Batch conversion of DMS to decimal degrees
 **Output**: Formatted tables with high precision (10 decimal places)
+
+### 4. Origin Point Statistics Calculator
+
+**File**: `origin_statistics.py`
+**Purpose**: Calculate averaged origin coordinates from multiple BESTPOSA measurements
+**Features**:
+
+- Parses BESTPOSA format logs (NovAtel GPS receivers)
+- Extracts latitude, longitude, and height from all data points
+- Computes statistical mean from all measurements
+- Calculates precision metrics (standard deviation, range)
+- Validates measurement consistency across all points
+  **Output**: High-precision averaged coordinates with statistical analysis (10+ decimal places)
+
+**Point A Results from 14 PPP Measurements**:
+
+- **Average Latitude**: 51.07900053607°
+- **Average Longitude**: -114.13253483192°
+- **Average Height**: 1113.9210 m
+- **Horizontal Precision**: ~2 mm (0.0019-0.0021 m standard deviation)
+- **Vertical Precision**: 2.4 mm (0.0024 m standard deviation)
+- **Total Measurement Spread**: ~6 mm horizontal, 8.8 mm vertical
+
+This represents excellent PPP (Precise Point Positioning) quality with sub-centimeter accuracy.
+
+### 5. Raw Data Parser
+
+**Purpose**: Extract BESTPOSA logs from raw GPS console output
+**Process**:
+
+- Reads raw console log files
+- Splits data by delimiter (#)
+- Extracts first 208 characters (BESTPOSA message length)
+- Outputs clean CSV format for further processing
+  **Input**: Raw NovAtel console text file
+  **Output**: Parsed CSV with BESTPOSA messages ready for statistical analysis
 
 ---
 
@@ -338,18 +373,6 @@ pip install pyproj
 4. **Robotics**: Local navigation in ENU coordinates
 5. **Satellite Systems**: ECEF-based positioning
 6. **Civil Engineering**: Construction layout and measurements
-
----
-
-## Future Enhancements
-
-- [ ] Support for additional ellipsoids (GRS80, Clarke 1866)
-- [ ] UTM coordinate system integration
-- [ ] 3D bearing intersection (not just 2D)
-- [ ] Batch processing from CSV files
-- [ ] Coordinate transformation accuracy reports
-- [ ] Visualization of point networks
-- [ ] Export to common GIS formats (KML, GeoJSON)
 
 ---
 
