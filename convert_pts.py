@@ -138,9 +138,6 @@ class GeoConverter:
         
         det = matrix[0][0]*matrix[1][1] - matrix[0][1]*matrix[1][0]
         
-        if abs(det) < 1e-10:
-            raise ValueError("Bearing vectors are parallel, no intersection possible")
-        
         t = (rhs[0]*matrix[1][1] - rhs[1]*matrix[0][1]) / det
         
         e_east = d_east + t*v1_east

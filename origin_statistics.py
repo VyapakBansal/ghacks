@@ -3,16 +3,8 @@ import statistics
 def parse_bestposa_line(line):
     if not line.strip() or line.startswith('#'):
         return None
-    
     parts = line.split(';')
-    if len(parts) < 2:
-        return None
-    
     data = parts[1].split(',')
-    
-    if len(data) < 5:
-        return None
-    
     try:
         latitude = float(data[2])
         longitude = float(data[3])
@@ -44,9 +36,9 @@ def calculate_point_a_from_bestposa(csv_data):
     avg_lon = statistics.mean(longitudes)
     avg_height = statistics.mean(heights)
     
-    std_lat = statistics.stdev(latitudes) if len(latitudes) > 1 else 0
-    std_lon = statistics.stdev(longitudes) if len(longitudes) > 1 else 0
-    std_height = statistics.stdev(heights) if len(heights) > 1 else 0
+    std_lat = statistics.stdev(latitudes)
+    std_lon = statistics.stdev(longitudes)
+    std_height = statistics.stdev(heights)
     
     return {
         'point_a': {
