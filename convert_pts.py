@@ -105,3 +105,6 @@ print(x, y, z)
 print(e, n, u)
 print(dist, bearing)
 print(new_lat, new_lon)
+
+C = (51.07730691, -114.13264705, 1000.33)
+print(geo.geodetic_to_ecef(*C))
