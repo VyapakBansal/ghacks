@@ -71,10 +71,99 @@ class GeoConverter:
         lon2, lat2, _ = self.geod.fwd(lon, lat, azimuth_deg, distance_m)
         return lat2, lon2
 
+    def deg_to_dms(self, deg, is_lon=False):
+        direction = ('N' if deg >= 0 else 'S') if not is_lon else ('E' if deg >= 0 else 'W')
+        deg = abs(deg)
+        d = int(deg)
+        m = int((deg - d) * 60)
+        s = ((deg - d) * 60 - m) * 60
+        return f"{d}°{m}'{s:.4f}\"{direction}"
+
+    def bearing_to_vector(self, bearing_deg):
+        bearing_rad = math.radians(bearing_deg)
+        east = math.sin(bearing_rad)
+        north = math.cos(bearing_rad)
+        return east, north
+
+    def calculate_point_b(self, lat_a, lon_a, h_a, bearing_deg, distance_m, delta_h):
+        lon_b, lat_b, _ = self.geod.fwd(lon_a, lat_a, bearing_deg, distance_m)
+        h_b = h_a + delta_h
+        lat_dms = self.deg_to_dms(lat_b, is_lon=False)
+        lon_dms = self.deg_to_dms(lon_b, is_lon=True)
+        return {
+            'geodetic': (lat_b, lon_b, h_b),
+            'dms': (lat_dms, lon_dms)
+        }
+
+    def calculate_point_c(self, lat_b, lon_b, h_b, dx, dy, dz):
+        x_b, y_b, z_b = self.geodetic_to_ecef(lat_b, lon_b, h_b)
+        x_c = x_b + dx
+        y_c = y_b + dy
+        z_c = z_b + dz
+        lat_c, lon_c, h_c = self.ecef_to_geodetic(x_c, y_c, z_c)
+        lat_dms = self.deg_to_dms(lat_c, is_lon=False)
+        lon_dms = self.deg_to_dms(lon_c, is_lon=True)
+        return {
+            'ecef': (x_c, y_c, z_c),
+            'geodetic': (lat_c, lon_c, h_c),
+            'dms': (lat_dms, lon_dms)
+        }
+
+    def calculate_point_d(self, lat_c, lon_c, h_c, delta_east, delta_north, delta_up):
+        x_c, y_c, z_c = self.geodetic_to_ecef(lat_c, lon_c, h_c)
+        e_c, n_c, u_c = self.ecef_to_enu(x_c, y_c, z_c, lat_c, lon_c, h_c)
+        e_d = e_c + delta_east
+        n_d = n_c + delta_north
+        u_d = u_c + delta_up
+        x_d, y_d, z_d = self.enu_to_ecef(e_d, n_d, u_d, lat_c, lon_c, h_c)
+        lat_d, lon_d, h_d = self.ecef_to_geodetic(x_d, y_d, z_d)
+        lat_dms = self.deg_to_dms(lat_d, is_lon=False)
+        lon_dms = self.deg_to_dms(lon_d, is_lon=True)
+        return {
+            'enu': (e_d, n_d, u_d),
+            'ecef': (x_d, y_d, z_d),
+            'geodetic': (lat_d, lon_d, h_d),
+            'dms': (lat_dms, lon_dms)
+        }
+
+    def calculate_point_e(self, point_d_x, point_d_y, point_d_z, ref_lat, ref_lon, ref_h, 
+                         point_p_east, point_p_north, bearing_d_to_e, bearing_e_to_p, height_change):
+        d_east, d_north, d_up = self.ecef_to_enu(point_d_x, point_d_y, point_d_z, ref_lat, ref_lon, ref_h)
+        
+        v1_east, v1_north = self.bearing_to_vector(bearing_d_to_e)
+        v2_east, v2_north = self.bearing_to_vector(bearing_e_to_p)
+        
+        matrix = [[v1_east, v2_east], [v1_north, v2_north]]
+        rhs = [point_p_east - d_east, point_p_north - d_north]
+        
+        det = matrix[0][0]*matrix[1][1] - matrix[0][1]*matrix[1][0]
+        
+        if abs(det) < 1e-10:
+            raise ValueError("Bearing vectors are parallel, no intersection possible")
+        
+        t = (rhs[0]*matrix[1][1] - rhs[1]*matrix[0][1]) / det
+        
+        e_east = d_east + t*v1_east
+        e_north = d_north + t*v1_north
+        e_up = d_up + height_change
+        
+        e_x, e_y, e_z = self.enu_to_ecef(e_east, e_north, e_up, ref_lat, ref_lon, ref_h)
+        e_lat, e_lon, e_height = self.ecef_to_geodetic(e_x, e_y, e_z)
+        
+        lat_dms = self.deg_to_dms(e_lat, is_lon=False)
+        lon_dms = self.deg_to_dms(e_lon, is_lon=True)
+        
+        return {
+            'enu': (e_east, e_north, e_up),
+            'ecef': (e_x, e_y, e_z),
+            'geodetic': (e_lat, e_lon, e_height),
+            'dms': (lat_dms, lon_dms)
+        }
+
 
 def main():
     geo = GeoConverter()
-    
+    print("=" * 50)
     print("Geo Coordinate Converter")
     print("=" * 50)
     
@@ -85,8 +174,12 @@ def main():
         print("4. ENU to ECEF")
         print("5. Distance and Bearing")
         print("6. Project from Point")
-        print("7. Exit")
-        
+        print("7. Calculate Point B (bearing + distance + height change)")
+        print("8. Calculate Point C (ECEF offset)")
+        print("9. Calculate Point D (ENU offset)")
+        print("10. Calculate Point E (bearing intersection)")
+        print("11. Exit")
+        print("-" * 50)
         choice = input("\nSelect option: ")
         
         if choice == "1":
@@ -140,6 +233,61 @@ def main():
             print(f"New Point: Lat={new_lat}, Lon={new_lon}")
             
         elif choice == "7":
+            lat_a = float(input("Point A Latitude (degrees): "))
+            lon_a = float(input("Point A Longitude (degrees): "))
+            h_a = float(input("Point A Height (meters): "))
+            bearing = float(input("Bearing from A to B (degrees): "))
+            distance = float(input("Distance A to B (meters): "))
+            delta_h = float(input("Height change (meters): "))
+            result = geo.calculate_point_b(lat_a, lon_a, h_a, bearing, distance, delta_h)
+            print(f"Point B Geodetic: {result['geodetic']}")
+            print(f"Point B DMS: {result['dms']}")
+            
+        elif choice == "8":
+            lat_b = float(input("Point B Latitude (degrees): "))
+            lon_b = float(input("Point B Longitude (degrees): "))
+            h_b = float(input("Point B Height (meters): "))
+            dx = float(input("Delta X (meters): "))
+            dy = float(input("Delta Y (meters): "))
+            dz = float(input("Delta Z (meters): "))
+            result = geo.calculate_point_c(lat_b, lon_b, h_b, dx, dy, dz)
+            print(f"Point C ECEF: {result['ecef']}")
+            print(f"Point C Geodetic: {result['geodetic']}")
+            print(f"Point C DMS: {result['dms']}")
+            
+        elif choice == "9":
+            lat_c = float(input("Point C Latitude (degrees): "))
+            lon_c = float(input("Point C Longitude (degrees): "))
+            h_c = float(input("Point C Height (meters): "))
+            delta_east = float(input("Delta East (meters): "))
+            delta_north = float(input("Delta North (meters): "))
+            delta_up = float(input("Delta Up (meters): "))
+            result = geo.calculate_point_d(lat_c, lon_c, h_c, delta_east, delta_north, delta_up)
+            print(f"Point D ENU: {result['enu']}")
+            print(f"Point D ECEF: {result['ecef']}")
+            print(f"Point D Geodetic: {result['geodetic']}")
+            print(f"Point D DMS: {result['dms']}")
+            
+        elif choice == "10":
+            point_d_x = float(input("Point D X (meters): "))
+            point_d_y = float(input("Point D Y (meters): "))
+            point_d_z = float(input("Point D Z (meters): "))
+            ref_lat = float(input("Reference Latitude (degrees): "))
+            ref_lon = float(input("Reference Longitude (degrees): "))
+            ref_h = float(input("Reference Height (meters): "))
+            point_p_east = float(input("Point P East (meters): "))
+            point_p_north = float(input("Point P North (meters): "))
+            bearing_d_to_e = float(input("Bearing D to E (degrees): "))
+            bearing_e_to_p = float(input("Bearing E to P (degrees): "))
+            height_change = float(input("Height change (meters): "))
+            result = geo.calculate_point_e(point_d_x, point_d_y, point_d_z, ref_lat, ref_lon, ref_h,
+                                          point_p_east, point_p_north, bearing_d_to_e, bearing_e_to_p, height_change)
+            print(f"Point E ENU: {result['enu']}")
+            print(f"Point E ECEF: {result['ecef']}")
+            print(f"Point E Geodetic: {result['geodetic']}")
+            print(f"Point E DMS: {result['dms']}")
+            
+        elif choice >= "11":
             break
             
         else:
